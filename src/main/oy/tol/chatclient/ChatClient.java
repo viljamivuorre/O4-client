@@ -25,9 +25,8 @@ import oy.tol.chat.Message;
 public class ChatClient implements ChatClientDataProvider {
 
 	private static final String SERVER = "localhost:10000";
-	private static final String CMD_REGISTER = "/register";
-	private static final String CMD_LOGIN = "/login";
 	private static final String CMD_NICK = "/nick";
+	private static final String CMD_CHANNEL = "/channel";
 	private static final String CMD_COLOR = "/color";
 	private static final String CMD_HELP = "/help";
 	private static final String CMD_INFO = "/info";
@@ -35,22 +34,18 @@ public class ChatClient implements ChatClientDataProvider {
 
 	private String currentServer = SERVER; // URL of the server without paths.
 	private String clientCertificateFile = null; // The client cert for the server.
-	private String payloadFormat = null;
-	private String username = null; // Registered & logged user.
-	private String password = null; // The password in clear text.
-	private String email = null; // Email address of user, needed for registering.
 	private String nick = null; // Nickname, user can change the name visible in chats.
+	private String channel = "main";
 
 	private ChatTCPClient tcpClient = null; // Client handling the requests & responses.
 
-	private boolean autoFetch = false;
-	private boolean useColorOutput = false;
+	private static boolean useColorOutput = false;
 
-	static final Attribute colorDate = Attribute.GREEN_TEXT();
-	static final Attribute colorNick = Attribute.BRIGHT_BLUE_TEXT();
-	static final Attribute colorMsg = Attribute.CYAN_TEXT();
-	static final Attribute colorError = Attribute.BRIGHT_RED_TEXT();
-	static final Attribute colorInfo = Attribute.YELLOW_TEXT();
+	public static final Attribute colorDate = Attribute.GREEN_TEXT();
+	public static final Attribute colorNick = Attribute.BRIGHT_BLUE_TEXT();
+	public static final Attribute colorMsg = Attribute.CYAN_TEXT();
+	public static final Attribute colorError = Attribute.BRIGHT_RED_TEXT();
+	public static final Attribute colorInfo = Attribute.YELLOW_TEXT();
 
 	public static void main(String[] args) {
 		if (args.length == 1) {								
@@ -82,7 +77,7 @@ public class ChatClient implements ChatClientDataProvider {
 		printCommands();
 		printInfo();
 		Console console = System.console();
-		if (null == username || null == password) {
+		if (null == nick) {
 			println("!! Register or login to server first.", colorInfo);
 		}
 		boolean running = true;
@@ -91,14 +86,11 @@ public class ChatClient implements ChatClientDataProvider {
 				print("O4-chat > ", colorInfo);
 				String command = console.readLine().trim();
 				switch (command) {
-					case CMD_REGISTER:
-						registerUser(console);
-						break;
-					case CMD_LOGIN:
-						getUserCredentials(console, false);
-						break;
 					case CMD_NICK:
 						getNick(console);
+						break;
+					case CMD_CHANNEL:
+						changeChannel(console);
 						break;
 					case CMD_COLOR:
 						useColorOutput = !useColorOutput;
@@ -128,55 +120,17 @@ public class ChatClient implements ChatClientDataProvider {
 		println("Bye!", colorInfo);
 	}
 
-	/**
-	 * Get user credentials from console (i.e. login or register). Registering a new
-	 * user actually communicates with the server. When logging in, user enters the
-	 * credentials (username & password), but no comms with server happens until
-	 * user actually either retrieves new chat messages from the server or posts a
-	 * new chat message.
-	 * 
-	 * @param console        The console for the UI
-	 * @param forRegistering If true, asks all registration data, otherwise just
-	 *                       login data.
-	 */
-	private void getUserCredentials(Console console, boolean forRegistering) {
-		print("Enter username > ", colorInfo);
-		String newUsername = console.readLine().trim();
-		if (newUsername.length() > 0) {
-			// Need to cancel autofetch since username/pw not usable anymore
-			// until login has been fully done (including password).
-			username = newUsername;
-			nick = username;
-			email = null;
-			password = null;
-		} else {
-			print("Continuing with existing credentials", colorInfo);
-			printInfo();
-			return;
-		}
-		print("Enter password > ", colorInfo);
-		char[] newPassword = console.readPassword();
-		if (null != newPassword && newPassword.length > 0) {
-			password = new String(newPassword);
-		} else {
-			print("Canceled, /register or /login!", colorError);
-			username = null;
-			password = null;
-			email = null;
-			nick = null;
-			return;
-		}
-		if (forRegistering) {
-			print("Enter email > ", colorInfo);
-			String newEmail = console.readLine().trim();
-			if (null != newEmail && newEmail.length() > 0) {
-				email = newEmail;
+	private void changeChannel(Console console) throws IOException {
+		print("Change to channel [with optional topic] > ", colorInfo);
+		String newChannel = console.readLine().trim();
+		if (newChannel.length() > 0) {
+			String elements [] = newChannel.split(" ");
+			if (elements.length == 2) {
+				channel = newChannel;
+				tcpClient.changeChannelTo(elements[0], elements[1]);	
 			} else {
-				print("Canceled, /register or /login!", colorError);
-				username = null;
-				password = null;
-				email = null;
-				nick = null;
+				channel = newChannel;
+				tcpClient.changeChannelTo(channel, "");	
 			}
 		}
 	}
@@ -195,44 +149,12 @@ public class ChatClient implements ChatClientDataProvider {
 	}
 
 	/**
-	 * Handles the registration of the user with the server. All credentials
-	 * (username, email and password) must be given. User is then registered with
-	 * the server.
-	 * 
-	 * @param console
-	 */
-	private void registerUser(Console console) {
-		println("Give user credentials for new user for server " + currentServer, colorInfo);
-		getUserCredentials(console, true);
-		try {
-			if (username == null || password == null || email == null) {
-				println("Must specify all user information for registration!", colorError);
-				return;
-			}
-			// Execute the HTTPS request to the server.
-			int response = tcpClient.registerUser();
-			if (response >= 200 || response < 300) {
-				println("Registered successfully, you may start chatting!", colorInfo);
-			} else {
-				println("Failed to register!", colorError);
-			}
-		} catch (KeyManagementException | KeyStoreException | CertificateException | NoSuchAlgorithmException
-				| FileNotFoundException e) {
-			println(" **** ERROR in server certificate", colorError);
-			println(e.getLocalizedMessage(),colorError);
-		} catch (Exception e) {
-			println(" **** ERROR in user registration with server " + currentServer, colorError);
-			println(e.getLocalizedMessage(),colorError);
-		}
-	}
-
-	/**
 	 * Sends a new chat message to the server. User must be logged in to the server.
 	 * 
 	 * @param message The chat message to send.
 	 */
 	private void postMessage(String message) {
-		if (null != username) {
+		if (null != nick) {
 			try {
 				tcpClient.postChatMessage(message);
 			} catch (KeyManagementException | KeyStoreException | CertificateException | NoSuchAlgorithmException
@@ -253,10 +175,8 @@ public class ChatClient implements ChatClientDataProvider {
 	 */
 	private void printCommands() {
 		println("--- O4 Chat Client Commands ---", colorInfo);
-		println("/register  -- Register as a new user in server", colorInfo);
-		println("/login     -- Login using already registered credentials", colorInfo);
 		println("/nick      -- Specify a nickname to use in chat server", colorInfo);
-		println("/get       -- Get new messages from server", colorInfo);
+		println("/channel   -- Specify a channel to switch to in the chat server", colorInfo);
 		println("/color     -- Toggles color output on/off", colorInfo);
 		println("/help      -- Prints out this information", colorInfo);
 		println("/info      -- Prints out settings and user information", colorInfo);
@@ -269,14 +189,11 @@ public class ChatClient implements ChatClientDataProvider {
 	 */
 	private void printInfo() {
 		println("Server: " + currentServer, colorInfo);
-		println("Content type used: " + payloadFormat, colorInfo);
-		println("User: " + username, colorInfo);
 		println("Nick: " + nick, colorInfo);
-		println("Autofetch is " + (autoFetch ? "on" : "off"), colorInfo);
 		println("Using color in output: " + (useColorOutput ? "yes" : "no"), colorInfo);
 	}
 
-	private void print(String item, Attribute withAttribute) {
+	public static void print(String item, Attribute withAttribute) {
 		if (useColorOutput) {
 			System.out.print(Ansi.colorize(item, withAttribute));
 		} else {
@@ -284,7 +201,7 @@ public class ChatClient implements ChatClientDataProvider {
 		}
 	}
 
-	private void println(String item, Attribute withAttribute) {
+	public static void println(String item, Attribute withAttribute) {
 		if (useColorOutput) {
 			System.out.println(Ansi.colorize(item, withAttribute));
 		} else {
@@ -299,7 +216,8 @@ public class ChatClient implements ChatClientDataProvider {
 		FileInputStream istream;
 		istream = new FileInputStream(configFile);
 		config.load(istream);
-		currentServer = config.getProperty("server", "localhost:10000");
+		currentServer = config.getProperty("server", "127.0.0.1:10000");
+		nick = config.getProperty("nick", "");
 		clientCertificateFile = config.getProperty("certfile", "");
 		if (config.getProperty("usecolor", "false").equalsIgnoreCase("true")) {
 			useColorOutput = true;
@@ -319,23 +237,8 @@ public class ChatClient implements ChatClientDataProvider {
 	}
 
 	@Override
-	public String getUsername() {
-		return username;
-	}
-
-	@Override
-	public String getPassword() {
-		return password;
-	}
-
-	@Override
 	public String getNick() {
 		return nick;
-	}
-
-	@Override
-	public String getEmail() {
-		return email;
 	}
 
 	@Override
@@ -349,15 +252,16 @@ public class ChatClient implements ChatClientDataProvider {
 				}
 				break;
 			case Message.STATUS_MESSAGE:
-				println(message.getMessage(), colorInfo);
+				println("note: " + message.getMessage(), colorInfo);
 				break;
 			case Message.ERROR_MESSAGE:
-				println(message.getMessage(), colorError);
+				println("ERROR: " + message.getMessage(), colorError);
 				break;
 			default:
 				println("Unknown message type from server.", colorError);
 				break;
 		}
+		print("O4-chat > ", colorInfo);
 	}
 
 }

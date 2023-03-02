@@ -1,44 +1,33 @@
 package oy.tol.chatclient;
 
-import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.EOFException;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
-import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import oy.tol.chat.ChatMessage;
 import oy.tol.chat.ErrorMessage;
+import oy.tol.chat.JoinMessage;
 import oy.tol.chat.Message;
+import oy.tol.chat.MessageFactory;
 
 public class ChatTCPClient implements Runnable {
 
@@ -48,10 +37,13 @@ public class ChatTCPClient implements Runnable {
 			.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX");
 
 	private String certificateFile;
-	private boolean useTlsInRequests = true;
+	private boolean useTlsInRequests = false;
 
 	private Socket socket;
 	private boolean running = true;
+
+	private OutputStream writer;
+	private DataInputStream inStream;
 
 	ChatTCPClient(ChatClientDataProvider provider, String certificateFileWithPath) {
 		dataProvider = provider;
@@ -64,35 +56,37 @@ public class ChatTCPClient implements Runnable {
 	public synchronized void postChatMessage(String message)
 			throws KeyManagementException, KeyStoreException, CertificateException,
 			NoSuchAlgorithmException, IOException {
-		String addr = dataProvider.getServer();
-		String auth = dataProvider.getUsername();
+		String userName = dataProvider.getNick();
+		ChatMessage msg = new ChatMessage(LocalDateTime.now(), userName, message);
+		String jsonObjectString = msg.toJSON();
+		write(jsonObjectString);
+	}
 
-		byte[] msgBytes;
-		JSONObject msg = new JSONObject();
-		msg.put("user", dataProvider.getNick());
-		msg.put("message", message);
-		ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
-		String dateText = now.format(jsonDateFormatter);
-		msg.put("sent", dateText);
-		msgBytes = msg.toString().getBytes(StandardCharsets.UTF_8);
-		OutputStream writer = socket.getOutputStream();
-		writer.write(msgBytes);
-		writer.close();
+	private synchronized void write(String message) throws IOException {
+		ChatClient.println("Sending: " + message, ChatClient.colorInfo);
+		byte [] msgBytes = message.getBytes(StandardCharsets.UTF_8);
+		byte[] allBytes = new byte[msgBytes.length + 2];
+		ByteBuffer byteBuffer = ByteBuffer.wrap(allBytes, 0, allBytes.length);
+		short msgLen = (short)allBytes.length;
+		ChatClient.println("Writing bytes: " + msgLen, ChatClient.colorInfo);
+		byteBuffer = byteBuffer.putShort(msgLen);
+		byteBuffer = byteBuffer.put(msgBytes);
+		writer.write(allBytes);
 	}
 
 	@Override
 	public void run() {
-
 		while (running) {
 			try {
-				DataInputStream inStream = new DataInputStream(socket.getInputStream());
+				if (socket == null) {
+					connect();
+				}
 				String data = "";
 				byte[] sizeBytes = new byte[2];
 				sizeBytes[0] = inStream.readByte();
 				sizeBytes[1] = inStream.readByte();
 				ByteBuffer byteBuffer = ByteBuffer.wrap(sizeBytes, 0, 2);
 				int bytesToRead = byteBuffer.getShort();
-				System.out.println("Read " + bytesToRead + " bytes");
 	
 				if (bytesToRead > 0) {
 					int bytesRead = 0;
@@ -102,18 +96,33 @@ public class ChatTCPClient implements Runnable {
 						byteBuffer.put(inStream.readByte());
 						bytesRead++;
 					}
-					if (bytesRead == bytesToRead) {
-						data = new String(messageBytes, 0, bytesRead, StandardCharsets.UTF_8);
-						handleMessage(data);
-					}
+					data = new String(messageBytes, 0, bytesRead, StandardCharsets.UTF_8);
+					ChatClient.println("Received: " + data, ChatClient.colorInfo);
+					handleMessage(data);
 				}
 			} catch (EOFException e) {
-				System.out.println("ChatSession: EOFException");
+				ChatClient.println("ChatSession: EOFException", ChatClient.colorError);
 				close();
 			} catch (IOException e) {
-				System.out.println("ChatSession: IOException");
+				ChatClient.println("ChatSession: IOException", ChatClient.colorError);
 				close();
+			} catch (Exception e) {
+				e.printStackTrace();
 			}
+		}
+	}
+
+	private void connect() throws Exception {
+		String address = dataProvider.getServer();
+		ChatClient.println("Connecting to server " + address, ChatClient.colorError);
+		String components [] = address.split(":");
+		if (components.length == 2) {
+			int port = Integer.parseInt(components[1]);
+			socket = new Socket(components[0], port);
+			writer = socket.getOutputStream();
+			inStream = new DataInputStream(socket.getInputStream());
+		} else {
+			ChatClient.println("Invalid server address in settings", ChatClient.colorError);
 		}
 	}
 
@@ -121,23 +130,7 @@ public class ChatTCPClient implements Runnable {
 		Message received = null;
 		try {
 			JSONObject jsonObject = new JSONObject(data);
-			int msgType = jsonObject.getInt("type");
-
-			switch (msgType) {
-				case Message.CHAT_MESSAGE:
-					received = handleChatMessage(jsonObject);
-					break;
-
-				case Message.STATUS_MESSAGE:
-					break;
-
-				case Message.ERROR_MESSAGE:
-					break;
-
-				default: // Clients cannot send other message types.
-					received = new ErrorMessage("Invalid message from client, not handled");
-					break;
-			}
+			received = MessageFactory.fromJSON(jsonObject);
 		} catch (JSONException e) {
 			e.printStackTrace();
 			received = new ErrorMessage("Invalid JSON message from client");
@@ -145,20 +138,20 @@ public class ChatTCPClient implements Runnable {
 		dataProvider.handleReceived(received);
 	}
 
-	private Message handleChatMessage(JSONObject jsonObject) {
-		String userName = jsonObject.getString("user");
-		String msg = jsonObject.getString("message");
-		String dateStr = jsonObject.getString("sent");
-		OffsetDateTime odt = OffsetDateTime.parse(dateStr);
-		return new ChatMessage(odt.toLocalDateTime(), userName, msg);
-	}
-
 	public void close() {
 		running = false;
-		try {
-			socket.close();
-		} catch (IOException e) {
-			e.printStackTrace();
+		if (null != socket) {
+			try {
+				socket.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}	
 		}
+	}
+
+	public void changeChannelTo(String channel, String topic) throws IOException {
+		JoinMessage msg = new JoinMessage(channel, topic);
+		String jsonObjectString = msg.toJSON();
+		write(jsonObjectString);
 	}
 }
