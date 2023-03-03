@@ -37,8 +37,8 @@ public class ChatClient implements ChatClientDataProvider {
 	private String currentServer = SERVER; // URL of the server without paths.
 	private String nick = null; // Nickname, user can change the name visible in chats.
 	private String currentChannel = "main";
-
 	private ChatTCPClient tcpClient = null; // Client handling the requests & responses.
+	private boolean running = true;
 
 	private static boolean useColorOutput = false;
 
@@ -81,11 +81,13 @@ public class ChatClient implements ChatClientDataProvider {
 		printCommands();
 		printInfo();
 		Console console = System.console();
-		boolean running = true;
 		while (running) {
 			try {
 				printPrompt();
 				String command = console.readLine().trim();
+				if (!running) {
+					break;
+				}
 				int spaceIndex = command.indexOf(" ");
 				String commandString = null;
 				String commandParameters = null;
@@ -103,7 +105,7 @@ public class ChatClient implements ChatClientDataProvider {
 						changeChannel(console, commandParameters);
 						break;
 					case CMD_LIST:
-						listChannels(console);
+						listChannels();
 						break;
 					case CMD_TOPIC:
 						changeTopic(console, commandParameters);
@@ -139,6 +141,7 @@ public class ChatClient implements ChatClientDataProvider {
 				println(" *** ERROR : " + e.getMessage(), colorError);
 			}
 		}
+		tcpClient.close();
 		println("Bye!", colorInfo);
 	}
 
@@ -174,7 +177,7 @@ public class ChatClient implements ChatClientDataProvider {
 		}
 	}
 
-	private void listChannels(Console console) {
+	private void listChannels() {
 		tcpClient.listChannels();	
 	}
 
@@ -285,7 +288,8 @@ public class ChatClient implements ChatClientDataProvider {
 	}
 
 	@Override
-	public void handleReceived(Message message) {
+	public boolean handleReceived(Message message) {
+		boolean continueReceiving = true;
 		switch (message.getType()) {
 			case Message.CHAT_MESSAGE: {
 				if (message instanceof ChatMessage) {
@@ -317,7 +321,12 @@ public class ChatClient implements ChatClientDataProvider {
 
 			case Message.ERROR_MESSAGE: {
 				ErrorMessage msg = (ErrorMessage)message;
-				println("ERROR: " + msg.getError(), colorError);
+				println("Error: " + msg.getError(), colorError);
+				if (msg.requiresClientShutdown()) {
+					continueReceiving = false;
+					running = false;
+					println("Press enter", colorError);
+				}
 				break;
 			}
 
@@ -326,6 +335,13 @@ public class ChatClient implements ChatClientDataProvider {
 				break;
 		}
 		printPrompt();
+		return continueReceiving;
+	}
+
+	@Override
+	public void connectionClosed() {
+		println("Server closed the connection", colorError);
+		running = false;
 	}
 
 }

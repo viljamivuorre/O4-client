@@ -58,7 +58,10 @@ public class ChatTCPClient implements Runnable {
 				String data;
 				while ((data = in.readLine()) != null) {
 					// ChatClient.println("DEBUG IN: " + data, ChatClient.colorInfo);
-					handleMessage(data);
+					boolean continueReading = handleMessage(data);
+					if (!continueReading) {
+						break;
+					}
 				}
 			} catch (EOFException e) {
 				// ChatClient.println("ChatSession: EOFException", ChatClient.colorError);
@@ -86,7 +89,7 @@ public class ChatTCPClient implements Runnable {
 		}
 	}
 
-	private void handleMessage(String data) {
+	private boolean handleMessage(String data) {
 		Message received = null;
 		try {
 			JSONObject jsonObject = new JSONObject(data);
@@ -95,7 +98,7 @@ public class ChatTCPClient implements Runnable {
 			e.printStackTrace();
 			received = new ErrorMessage("Invalid JSON message from client");
 		}
-		dataProvider.handleReceived(received);
+		return dataProvider.handleReceived(received);
 	}
 
 	public void close() {
@@ -111,6 +114,7 @@ public class ChatTCPClient implements Runnable {
 				in = null;
 				out = null;
 				socket = null;
+				dataProvider.connectionClosed();
 			}
 		}
 	}
