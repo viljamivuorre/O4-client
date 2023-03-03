@@ -1,24 +1,14 @@
 package oy.tol.chatclient;
 
-import java.io.DataInputStream;
+import java.io.BufferedReader;
 import java.io.EOFException;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.Socket;
-import java.net.SocketAddress;
-import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.CertificateException;
 import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -33,45 +23,26 @@ public class ChatTCPClient implements Runnable {
 
 	private ChatClientDataProvider dataProvider = null;
 
-	private static final DateTimeFormatter jsonDateFormatter = DateTimeFormatter
-			.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX");
-
-	private String certificateFile;
-	private boolean useTlsInRequests = false;
-
 	private Socket socket;
 	private boolean running = true;
 
-	private OutputStream writer;
-	private DataInputStream inStream;
+	private PrintWriter out;
+	private BufferedReader in;
 
-	ChatTCPClient(ChatClientDataProvider provider, String certificateFileWithPath) {
+	ChatTCPClient(ChatClientDataProvider provider) {
 		dataProvider = provider;
-		certificateFile = certificateFileWithPath;
-		if (null == certificateFile) {
-			useTlsInRequests = false;
-		}
 	}
 
-	public synchronized void postChatMessage(String message)
-			throws KeyManagementException, KeyStoreException, CertificateException,
-			NoSuchAlgorithmException, IOException {
+	public synchronized void postChatMessage(String message) {
 		String userName = dataProvider.getNick();
 		ChatMessage msg = new ChatMessage(LocalDateTime.now(), userName, message);
 		String jsonObjectString = msg.toJSON();
 		write(jsonObjectString);
 	}
 
-	private synchronized void write(String message) throws IOException {
-		ChatClient.println("Sending: " + message, ChatClient.colorInfo);
-		byte [] msgBytes = message.getBytes(StandardCharsets.UTF_8);
-		byte[] allBytes = new byte[msgBytes.length + 2];
-		ByteBuffer byteBuffer = ByteBuffer.wrap(allBytes, 0, allBytes.length);
-		short msgLen = (short)allBytes.length;
-		ChatClient.println("Writing bytes: " + msgLen, ChatClient.colorInfo);
-		byteBuffer = byteBuffer.putShort(msgLen);
-		byteBuffer = byteBuffer.put(msgBytes);
-		writer.write(allBytes);
+	private synchronized void write(String message) {
+		ChatClient.println("DEBUG: " + message, ChatClient.colorError);
+		out.write(message + "\n");
 	}
 
 	@Override
@@ -82,21 +53,7 @@ public class ChatTCPClient implements Runnable {
 					connect();
 				}
 				String data = "";
-				byte[] sizeBytes = new byte[2];
-				sizeBytes[0] = inStream.readByte();
-				sizeBytes[1] = inStream.readByte();
-				ByteBuffer byteBuffer = ByteBuffer.wrap(sizeBytes, 0, 2);
-				int bytesToRead = byteBuffer.getShort();
-	
-				if (bytesToRead > 0) {
-					int bytesRead = 0;
-					byte[] messageBytes = new byte[bytesToRead];
-					byteBuffer = ByteBuffer.wrap(messageBytes, 0, bytesToRead);
-					while (bytesToRead > bytesRead) {
-						byteBuffer.put(inStream.readByte());
-						bytesRead++;
-					}
-					data = new String(messageBytes, 0, bytesRead, StandardCharsets.UTF_8);
+				while ((data = in.readLine()) != null) {
 					ChatClient.println("Received: " + data, ChatClient.colorInfo);
 					handleMessage(data);
 				}
@@ -112,15 +69,15 @@ public class ChatTCPClient implements Runnable {
 		}
 	}
 
-	private void connect() throws Exception {
+	private void connect() throws IOException {
 		String address = dataProvider.getServer();
 		ChatClient.println("Connecting to server " + address, ChatClient.colorError);
-		String components [] = address.split(":");
+		String [] components = address.split(":");
 		if (components.length == 2) {
 			int port = Integer.parseInt(components[1]);
 			socket = new Socket(components[0], port);
-			writer = socket.getOutputStream();
-			inStream = new DataInputStream(socket.getInputStream());
+			out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+			in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
 		} else {
 			ChatClient.println("Invalid server address in settings", ChatClient.colorError);
 		}
@@ -142,14 +99,16 @@ public class ChatTCPClient implements Runnable {
 		running = false;
 		if (null != socket) {
 			try {
+				in.close();
+				out.close();
 				socket.close();
 			} catch (IOException e) {
-				e.printStackTrace();
-			}	
+				// nada
+			}
 		}
 	}
 
-	public void changeChannelTo(String channel, String topic) throws IOException {
+	public void changeChannelTo(String channel, String topic) {
 		JoinMessage msg = new JoinMessage(channel, topic);
 		String jsonObjectString = msg.toJSON();
 		write(jsonObjectString);

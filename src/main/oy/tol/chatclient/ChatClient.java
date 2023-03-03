@@ -5,10 +5,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.CertificateException;
 import java.util.Properties;
 
 import com.diogonunes.jcolor.Ansi;
@@ -26,16 +22,16 @@ public class ChatClient implements ChatClientDataProvider {
 
 	private static final String SERVER = "localhost:10000";
 	private static final String CMD_NICK = "/nick";
-	private static final String CMD_CHANNEL = "/channel";
+	private static final String CMD_JOIN = "/join";
+	private static final String CMD_TOPIC = "/topic";
 	private static final String CMD_COLOR = "/color";
 	private static final String CMD_HELP = "/help";
 	private static final String CMD_INFO = "/info";
 	private static final String CMD_EXIT = "/exit";
 
 	private String currentServer = SERVER; // URL of the server without paths.
-	private String clientCertificateFile = null; // The client cert for the server.
 	private String nick = null; // Nickname, user can change the name visible in chats.
-	private String channel = "main";
+	private String currentChannel = "main";
 
 	private ChatTCPClient tcpClient = null; // Client handling the requests & responses.
 
@@ -71,26 +67,38 @@ public class ChatClient implements ChatClientDataProvider {
 	public void run(String configFile) throws IOException {
 		println("Reading configuration...", colorInfo);
 		readConfiguration(configFile);
-
-		tcpClient = new ChatTCPClient(this, clientCertificateFile);
+		if (null == nick) {
+			println("!! Provide a nick in settings", colorError);
+		}
+		tcpClient = new ChatTCPClient(this);
 		new Thread(tcpClient).start();
 		printCommands();
 		printInfo();
 		Console console = System.console();
-		if (null == nick) {
-			println("!! Register or login to server first.", colorInfo);
-		}
 		boolean running = true;
 		while (running) {
 			try {
-				print("O4-chat > ", colorInfo);
+				String prompt = String.format("O4-chat @%s %s > ", currentChannel, nick);
+				print(prompt, colorInfo);
 				String command = console.readLine().trim();
-				switch (command) {
+				int spaceIndex = command.indexOf(" ");
+				String commandString = null;
+				String commandParameters = null;
+				if (spaceIndex > 0) {
+					commandString = command.substring(0, spaceIndex).trim();
+					commandParameters = command.substring(spaceIndex+1).trim();
+				} else {
+					commandString = command;
+				}	
+				switch (commandString) {
 					case CMD_NICK:
-						getNick(console);
+						changeNick(console, commandParameters);
 						break;
-					case CMD_CHANNEL:
-						changeChannel(console);
+					case CMD_JOIN:
+						changeChannel(console, commandParameters);
+						break;
+					case CMD_TOPIC:
+						changeTopic(console, commandParameters);
 						break;
 					case CMD_COLOR:
 						useColorOutput = !useColorOutput;
@@ -113,25 +121,35 @@ public class ChatClient implements ChatClientDataProvider {
 						break;
 				}
 			} catch (Exception e) {
-				println(" *** ERROR : " + e.getMessage(),colorError);
-				e.printStackTrace();
+				println(" *** ERROR : " + e.getMessage(), colorError);
 			}
 		}
 		println("Bye!", colorInfo);
 	}
 
-	private void changeChannel(Console console) throws IOException {
-		print("Change to channel [with optional topic] > ", colorInfo);
-		String newChannel = console.readLine().trim();
+	private void changeTopic(Console console, String topic) {
+		String newTopic;
+		if (null == topic) {
+			print("Change the channel topic > ", colorInfo);
+			newTopic = console.readLine().trim().toLowerCase();
+		} else {
+			newTopic = topic;
+		}
+		if (newTopic.length() > 0) {
+			tcpClient.changeChannelTo(currentChannel, newTopic);	
+		}
+	}
+
+	private void changeChannel(Console console, String channel) throws IOException {
+		String newChannel;
+		if (null == channel) {
+			print("Change to channel > ", colorInfo);
+			newChannel = console.readLine().trim().toLowerCase();
+		} else {
+			newChannel = channel;
+		}
 		if (newChannel.length() > 0) {
-			String elements [] = newChannel.split(" ");
-			if (elements.length == 2) {
-				channel = newChannel;
-				tcpClient.changeChannelTo(elements[0], elements[1]);	
-			} else {
-				channel = newChannel;
-				tcpClient.changeChannelTo(channel, "");	
-			}
+			tcpClient.changeChannelTo(channel, "");	
 		}
 	}
 
@@ -140,11 +158,17 @@ public class ChatClient implements ChatClientDataProvider {
 	 * 
 	 * @param console
 	 */
-	private void getNick(Console console) {
-		print("Enter nick > ", colorInfo);
-		String newNick = console.readLine().trim();
-		if (newNick.length() > 0) {
-			nick = newNick;
+	private void changeNick(Console console, String newNick) {
+		if (null == newNick) {
+			print("Enter nick > ", colorInfo);
+			String changedNick = console.readLine().trim();
+			if (changedNick.length() > 0) {
+				nick = changedNick;
+			}	
+		} else {
+			if (newNick.length() > 0) {
+				nick = newNick;
+			}
 		}
 	}
 
@@ -155,18 +179,9 @@ public class ChatClient implements ChatClientDataProvider {
 	 */
 	private void postMessage(String message) {
 		if (null != nick) {
-			try {
-				tcpClient.postChatMessage(message);
-			} catch (KeyManagementException | KeyStoreException | CertificateException | NoSuchAlgorithmException
-					| FileNotFoundException e) {
-				println(" **** ERROR in server certificate",colorError);
-				println(e.getLocalizedMessage(), colorError);
-			} catch (IOException e) {
-				println(" **** ERROR in posting message to server " + currentServer, colorError);
-				println(e.getLocalizedMessage(), colorError);
-			}
+			tcpClient.postChatMessage(message);
 		} else {
-			println("Must register/login to server before posting messages!", colorInfo);
+			println("Must set the nick before posting messages!", colorError);
 		}
 	}
 
@@ -218,7 +233,6 @@ public class ChatClient implements ChatClientDataProvider {
 		config.load(istream);
 		currentServer = config.getProperty("server", "127.0.0.1:10000");
 		nick = config.getProperty("nick", "");
-		clientCertificateFile = config.getProperty("certfile", "");
 		if (config.getProperty("usecolor", "false").equalsIgnoreCase("true")) {
 			useColorOutput = true;
 		}
@@ -248,6 +262,8 @@ public class ChatClient implements ChatClientDataProvider {
 				if (message instanceof ChatMessage) {
 					ChatMessage msg = (ChatMessage)message;
 					print(msg.getNick() + ": ", colorNick);
+					String channel = String.format("(%s) %s: > ", currentChannel, msg.sentAsString());
+					print(channel, colorInfo); 
 					println(message.getMessage(), colorMsg);						
 				}
 				break;
