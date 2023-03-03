@@ -5,13 +5,17 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 
 import com.diogonunes.jcolor.Ansi;
 import com.diogonunes.jcolor.Attribute;
 
 import oy.tol.chat.ChatMessage;
+import oy.tol.chat.ErrorMessage;
+import oy.tol.chat.ListChannelsMessage;
 import oy.tol.chat.Message;
+import oy.tol.chat.StatusMessage;
 
 /**
  * ChatClient is the console based UI for the ChatServer. It profides the
@@ -23,6 +27,7 @@ public class ChatClient implements ChatClientDataProvider {
 	private static final String SERVER = "localhost:10000";
 	private static final String CMD_NICK = "/nick";
 	private static final String CMD_JOIN = "/join";
+	private static final String CMD_LIST = "/list";
 	private static final String CMD_TOPIC = "/topic";
 	private static final String CMD_COLOR = "/color";
 	private static final String CMD_HELP = "/help";
@@ -42,6 +47,7 @@ public class ChatClient implements ChatClientDataProvider {
 	public static final Attribute colorMsg = Attribute.CYAN_TEXT();
 	public static final Attribute colorError = Attribute.BRIGHT_RED_TEXT();
 	public static final Attribute colorInfo = Attribute.YELLOW_TEXT();
+	public static final Attribute fromServerInfo = Attribute.BRIGHT_BLUE_TEXT();
 
 	public static void main(String[] args) {
 		if (args.length == 1) {								
@@ -78,8 +84,7 @@ public class ChatClient implements ChatClientDataProvider {
 		boolean running = true;
 		while (running) {
 			try {
-				String prompt = String.format("O4-chat @%s %s > ", currentChannel, nick);
-				print(prompt, colorInfo);
+				printPrompt();
 				String command = console.readLine().trim();
 				int spaceIndex = command.indexOf(" ");
 				String commandString = null;
@@ -97,6 +102,9 @@ public class ChatClient implements ChatClientDataProvider {
 					case CMD_JOIN:
 						changeChannel(console, commandParameters);
 						break;
+					case CMD_LIST:
+						listChannels(console);
+						break;
 					case CMD_TOPIC:
 						changeTopic(console, commandParameters);
 						break;
@@ -105,18 +113,25 @@ public class ChatClient implements ChatClientDataProvider {
 						println("Using color in output: " + (useColorOutput ? "yes" : "no"), colorInfo);
 						break;
 					case CMD_HELP:
+					case "/?":
 						printCommands();
 						break;
 					case CMD_INFO:
+					case "/i":
 						printInfo();
 						break;
 					case CMD_EXIT:
-						tcpClient.close();
 						running = false;
+						tcpClient.close();
+						tcpClient = null;
 						break;
 					default:
-						if (command.length() > 0 && !command.startsWith("/")) {
-							postMessage(command);
+						if (command.length() > 0) { 
+							if (!command.startsWith("/")) {
+								postMessage(command);
+							} else {
+								println(" ** ERROR: " + command + " is not a valid command", colorError);
+							}
 						}
 						break;
 				}
@@ -125,6 +140,11 @@ public class ChatClient implements ChatClientDataProvider {
 			}
 		}
 		println("Bye!", colorInfo);
+	}
+
+	private void printPrompt() {
+		String prompt = String.format("O4-chat @%s %s > ", currentChannel, nick);
+		print(prompt, colorInfo);
 	}
 
 	private void changeTopic(Console console, String topic) {
@@ -136,7 +156,7 @@ public class ChatClient implements ChatClientDataProvider {
 			newTopic = topic;
 		}
 		if (newTopic.length() > 0) {
-			tcpClient.changeChannelTo(currentChannel, newTopic);	
+			tcpClient.changeTopicTo(newTopic);
 		}
 	}
 
@@ -149,9 +169,15 @@ public class ChatClient implements ChatClientDataProvider {
 			newChannel = channel;
 		}
 		if (newChannel.length() > 0) {
-			tcpClient.changeChannelTo(channel, "");	
+			currentChannel = newChannel;
+			tcpClient.changeChannelTo(channel);	
 		}
 	}
+
+	private void listChannels(Console console) {
+		tcpClient.listChannels();	
+	}
+
 
 	/**
 	 * User wants to change the nick, so ask it.
@@ -191,10 +217,12 @@ public class ChatClient implements ChatClientDataProvider {
 	private void printCommands() {
 		println("--- O4 Chat Client Commands ---", colorInfo);
 		println("/nick      -- Specify a nickname to use in chat server", colorInfo);
-		println("/channel   -- Specify a channel to switch to in the chat server", colorInfo);
+		println("/join      -- Specify a channel to switch to in the chat server", colorInfo);
+		println("/list      -- List the channels currently available in the chat server", colorInfo);
+		println("/topic     -- Set a topic for the current channel", colorInfo);
 		println("/color     -- Toggles color output on/off", colorInfo);
-		println("/help      -- Prints out this information", colorInfo);
-		println("/info      -- Prints out settings and user information", colorInfo);
+		println("/help, /?   -- Prints out this information", colorInfo);
+		println("/info  /i  -- Prints out settings and user information", colorInfo);
 		println("/exit      -- Exit the client app", colorInfo);
 		println(" > To chat, write a message and press enter to send a message.", colorInfo);
 	}
@@ -203,9 +231,10 @@ public class ChatClient implements ChatClientDataProvider {
 	 * Prints out the configuration of the client.
 	 */
 	private void printInfo() {
-		println("Server: " + currentServer, colorInfo);
-		println("Nick: " + nick, colorInfo);
-		println("Using color in output: " + (useColorOutput ? "yes" : "no"), colorInfo);
+		println("Server    : " + currentServer, colorInfo);
+		println("Channel   : " + currentChannel, colorInfo);
+		println("Nick      : " + nick, colorInfo);
+		println("Use color : " + (useColorOutput ? "yes" : "no"), colorInfo);
 	}
 
 	public static void print(String item, Attribute withAttribute) {
@@ -258,26 +287,45 @@ public class ChatClient implements ChatClientDataProvider {
 	@Override
 	public void handleReceived(Message message) {
 		switch (message.getType()) {
-			case Message.CHAT_MESSAGE:
+			case Message.CHAT_MESSAGE: {
 				if (message instanceof ChatMessage) {
 					ChatMessage msg = (ChatMessage)message;
-					print(msg.getNick() + ": ", colorNick);
-					String channel = String.format("(%s) %s: > ", currentChannel, msg.sentAsString());
+					String channel = String.format("%n(%s) %s - ", currentChannel, msg.sentAsString());
 					print(channel, colorInfo); 
-					println(message.getMessage(), colorMsg);						
+					print(msg.getNick() + ": ", colorNick);
+					println(msg.getMessage(), colorMsg);						
 				}
 				break;
-			case Message.STATUS_MESSAGE:
-				println("note: " + message.getMessage(), colorInfo);
+			}
+
+			case Message.LIST_CHANNELS: {
+				ListChannelsMessage msg = (ListChannelsMessage)message;
+				List<String> channels = msg.getChannels();
+				if (null != channels) {
+					print("Channels in server: ", fromServerInfo);
+					print(channels.toString(), fromServerInfo);
+					println(" ", fromServerInfo);
+				}
 				break;
-			case Message.ERROR_MESSAGE:
-				println("ERROR: " + message.getMessage(), colorError);
+			}
+
+			case Message.STATUS_MESSAGE: {
+				StatusMessage msg = (StatusMessage)message;
+				println("note: " + msg.getStatus(), fromServerInfo);
 				break;
+			}
+
+			case Message.ERROR_MESSAGE: {
+				ErrorMessage msg = (ErrorMessage)message;
+				println("ERROR: " + msg.getError(), colorError);
+				break;
+			}
+
 			default:
 				println("Unknown message type from server.", colorError);
 				break;
 		}
-		print("O4-chat > ", colorInfo);
+		printPrompt();
 	}
 
 }

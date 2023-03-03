@@ -13,9 +13,11 @@ import java.time.LocalDateTime;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import oy.tol.chat.ChangeTopicMessage;
 import oy.tol.chat.ChatMessage;
 import oy.tol.chat.ErrorMessage;
 import oy.tol.chat.JoinMessage;
+import oy.tol.chat.ListChannelsMessage;
 import oy.tol.chat.Message;
 import oy.tol.chat.MessageFactory;
 
@@ -41,8 +43,9 @@ public class ChatTCPClient implements Runnable {
 	}
 
 	private synchronized void write(String message) {
-		ChatClient.println("DEBUG: " + message, ChatClient.colorError);
+		// ChatClient.println("DEBUG OUT: " + message, ChatClient.colorError);
 		out.write(message + "\n");
+		out.flush();
 	}
 
 	@Override
@@ -52,16 +55,16 @@ public class ChatTCPClient implements Runnable {
 				if (socket == null) {
 					connect();
 				}
-				String data = "";
+				String data;
 				while ((data = in.readLine()) != null) {
-					ChatClient.println("Received: " + data, ChatClient.colorInfo);
+					// ChatClient.println("DEBUG IN: " + data, ChatClient.colorInfo);
 					handleMessage(data);
 				}
 			} catch (EOFException e) {
-				ChatClient.println("ChatSession: EOFException", ChatClient.colorError);
+				// ChatClient.println("ChatSession: EOFException", ChatClient.colorError);
 				close();
 			} catch (IOException e) {
-				ChatClient.println("ChatSession: IOException", ChatClient.colorError);
+				// ChatClient.println("ChatSession: IOException", ChatClient.colorError);
 				close();
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -71,7 +74,7 @@ public class ChatTCPClient implements Runnable {
 
 	private void connect() throws IOException {
 		String address = dataProvider.getServer();
-		ChatClient.println("Connecting to server " + address, ChatClient.colorError);
+		// ChatClient.println("Connecting to server " + address, ChatClient.colorError);
 		String [] components = address.split(":");
 		if (components.length == 2) {
 			int port = Integer.parseInt(components[1]);
@@ -99,18 +102,34 @@ public class ChatTCPClient implements Runnable {
 		running = false;
 		if (null != socket) {
 			try {
-				in.close();
-				out.close();
 				socket.close();
+				if (null != in) in.close();
+				if (null != out) out.close();
 			} catch (IOException e) {
 				// nada
+			} finally {
+				in = null;
+				out = null;
+				socket = null;
 			}
 		}
 	}
 
-	public void changeChannelTo(String channel, String topic) {
-		JoinMessage msg = new JoinMessage(channel, topic);
+	public void changeChannelTo(String channel) {
+		JoinMessage msg = new JoinMessage(channel);
 		String jsonObjectString = msg.toJSON();
 		write(jsonObjectString);
+	}
+
+	public void changeTopicTo(String topic) {
+		ChangeTopicMessage newTopic = new ChangeTopicMessage(topic);
+		String jsonString = newTopic.toJSON();
+		write(jsonString);
+	}
+
+	public void listChannels() {
+		ListChannelsMessage listChannels = new ListChannelsMessage();
+		String msg = listChannels.toJSON();
+		write(msg);
 	}
 }
