@@ -5,8 +5,15 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Properties;
+
+import static java.time.temporal.ChronoField.HOUR_OF_DAY;
+import static java.time.temporal.ChronoField.MINUTE_OF_HOUR;
+import static java.time.temporal.ChronoField.SECOND_OF_MINUTE;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 
 import com.diogonunes.jcolor.Ansi;
 import com.diogonunes.jcolor.Attribute;
@@ -43,11 +50,21 @@ public class ChatClient implements ChatClientDataProvider {
 	private static boolean useColorOutput = false;
 
 	public static final Attribute colorDate = Attribute.GREEN_TEXT();
-	public static final Attribute colorNick = Attribute.BRIGHT_BLUE_TEXT();
+	public static final Attribute colorOwnNick = Attribute.BRIGHT_BLUE_TEXT();
 	public static final Attribute colorMsg = Attribute.CYAN_TEXT();
 	public static final Attribute colorError = Attribute.BRIGHT_RED_TEXT();
 	public static final Attribute colorInfo = Attribute.YELLOW_TEXT();
+	public static final Attribute colorOtherNick = Attribute.BRIGHT_YELLOW_TEXT();
 	public static final Attribute fromServerInfo = Attribute.BRIGHT_BLUE_TEXT();
+
+	private static final DateTimeFormatter timeFormatter = new DateTimeFormatterBuilder()
+			.appendValue(HOUR_OF_DAY, 2)
+			.appendLiteral(':')
+			.appendValue(MINUTE_OF_HOUR, 2)
+			.optionalStart()
+			.appendLiteral(':')
+			.appendValue(SECOND_OF_MINUTE, 2)
+			.toFormatter();
 
 	public static void main(String[] args) {
 		if (args.length == 1) {								
@@ -83,7 +100,7 @@ public class ChatClient implements ChatClientDataProvider {
 		Console console = System.console();
 		while (running) {
 			try {
-				printPrompt();
+				printPrompt(LocalDateTime.now(), nick, "", colorMsg);
 				String command = console.readLine().trim();
 				if (!running) {
 					break;
@@ -124,7 +141,7 @@ public class ChatClient implements ChatClientDataProvider {
 						break;
 					case CMD_EXIT:
 						running = false;
-						tcpClient.close();
+						if (null != tcpClient) tcpClient.close();
 						tcpClient = null;
 						break;
 					default:
@@ -141,13 +158,10 @@ public class ChatClient implements ChatClientDataProvider {
 				println(" *** ERROR : " + e.getMessage(), colorError);
 			}
 		}
-		tcpClient.close();
+		if (null != tcpClient) {			
+			tcpClient.close();
+		}
 		println("Bye!", colorInfo);
-	}
-
-	private void printPrompt() {
-		String prompt = String.format("O4-chat @%s %s > ", currentChannel, nick);
-		print(prompt, colorInfo);
 	}
 
 	private void changeTopic(Console console, String topic) {
@@ -163,7 +177,7 @@ public class ChatClient implements ChatClientDataProvider {
 		}
 	}
 
-	private void changeChannel(Console console, String channel) throws IOException {
+	private void changeChannel(Console console, String channel) {
 		String newChannel;
 		if (null == channel) {
 			print("Change to channel > ", colorInfo);
@@ -227,7 +241,7 @@ public class ChatClient implements ChatClientDataProvider {
 		println("/help, /?   -- Prints out this information", colorInfo);
 		println("/info  /i  -- Prints out settings and user information", colorInfo);
 		println("/exit      -- Exit the client app", colorInfo);
-		println(" > To chat, write a message and press enter to send a message.", colorInfo);
+		println(" > To chat, write a message and press enter to send it.", colorInfo);
 	}
 
 	/**
@@ -238,6 +252,23 @@ public class ChatClient implements ChatClientDataProvider {
 		println("Channel   : " + currentChannel, colorInfo);
 		println("Nick      : " + nick, colorInfo);
 		println("Use color : " + (useColorOutput ? "yes" : "no"), colorInfo);
+	}
+
+	private void printPrompt(LocalDateTime timeStamp, String user, String message, Attribute withAttribute) {
+		String dateStr = timeFormatter.format(timeStamp);
+		String prompt = String.format("%n[%8s @%s] ", dateStr, currentChannel);
+		print(prompt, colorInfo);
+		prompt = String.format("%8s > ", user);
+		if (this.nick.equals(user)) {
+			print(prompt, colorOwnNick);
+			if (message.length() > 0) print(message, withAttribute);
+		} else if (user.equals("SERVER")) {
+			print(prompt, colorInfo);
+			if (message.length() > 0) print(message, withAttribute);
+		} else {
+			print(prompt, colorOtherNick);
+			if (message.length() > 0) print(message, withAttribute);
+		}
 	}
 
 	public static void print(String item, Attribute withAttribute) {
@@ -294,10 +325,7 @@ public class ChatClient implements ChatClientDataProvider {
 			case Message.CHAT_MESSAGE: {
 				if (message instanceof ChatMessage) {
 					ChatMessage msg = (ChatMessage)message;
-					String channel = String.format("%n(%s) %s - ", currentChannel, msg.sentAsString());
-					print(channel, colorInfo); 
-					print(msg.getNick() + ": ", colorNick);
-					println(msg.getMessage(), colorMsg);						
+					printPrompt(msg.getSent(), msg.getNick(), msg.getMessage(), colorOtherNick);
 				}
 				break;
 			}
@@ -306,26 +334,24 @@ public class ChatClient implements ChatClientDataProvider {
 				ListChannelsMessage msg = (ListChannelsMessage)message;
 				List<String> channels = msg.getChannels();
 				if (null != channels) {
-					print("Channels in server: ", fromServerInfo);
-					print(channels.toString(), fromServerInfo);
-					println(" ", fromServerInfo);
+					printPrompt(LocalDateTime.now(), "SERVER", "Channels in server: " + channels.toString(), fromServerInfo);
 				}
 				break;
 			}
 
 			case Message.STATUS_MESSAGE: {
 				StatusMessage msg = (StatusMessage)message;
-				println("note: " + msg.getStatus(), fromServerInfo);
+				printPrompt(LocalDateTime.now(), "SERVER", msg.getStatus(), colorInfo);
 				break;
 			}
 
 			case Message.ERROR_MESSAGE: {
 				ErrorMessage msg = (ErrorMessage)message;
-				println("Error: " + msg.getError(), colorError);
+				printPrompt(LocalDateTime.now(), "SERVER", msg.getError(), colorError);
 				if (msg.requiresClientShutdown()) {
 					continueReceiving = false;
 					running = false;
-					println("Press enter", colorError);
+					println("\nPress enter", colorError);
 				}
 				break;
 			}
@@ -334,13 +360,13 @@ public class ChatClient implements ChatClientDataProvider {
 				println("Unknown message type from server.", colorError);
 				break;
 		}
-		printPrompt();
+		printPrompt(LocalDateTime.now(), nick, "", colorMsg);
 		return continueReceiving;
 	}
 
 	@Override
 	public void connectionClosed() {
-		println("Server closed the connection", colorError);
+		if (running) println("Connection closed", colorError);
 		running = false;
 	}
 

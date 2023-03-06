@@ -3,7 +3,6 @@ package oy.tol.chat;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 import org.json.JSONObject;
@@ -15,8 +14,6 @@ public class ChatMessage extends Message {
     private String nick;
 	private String message;
 
-    private static final DateTimeFormatter timeFormatter = DateTimeFormatter.ISO_LOCAL_TIME;
-    private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     public ChatMessage(UUID id, LocalDateTime sent, String nick, String message) {
         super(Message.CHAT_MESSAGE);
@@ -80,11 +77,8 @@ public class ChatMessage extends Message {
         sent = LocalDateTime.ofInstant(Instant.ofEpochMilli(epoch), ZoneOffset.UTC);
     }
 
-    public String sentAsString() {
-        if (LocalDateTime.now().getDayOfMonth() == sent.getDayOfMonth()) {
-            return sent.format(timeFormatter);
-        }
-        return sent.format(dateTimeFormatter);
+    public LocalDateTime getSent() {
+        return sent;
     }
 
     @Override
