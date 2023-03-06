@@ -6,7 +6,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.net.InetAddress;
 import java.net.Socket;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 
@@ -81,18 +83,14 @@ public class ChatTCPClient implements Runnable {
 		}
 	}
 
-	private void connect() throws IOException {
-		String address = dataProvider.getServer();
+	private void connect() throws IOException, UnknownHostException {
+		String hostName = dataProvider.getServer();
+		int port = dataProvider.getPort();
+		InetAddress hostAddress = InetAddress.getByName(hostName);
+		socket = new Socket(hostAddress, port);
+		out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+		in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
 		// ChatClient.println("Connecting to server " + address, ChatClient.colorError);
-		String [] components = address.split(":");
-		if (components.length == 2) {
-			int port = Integer.parseInt(components[1]);
-			socket = new Socket(components[0], port);
-			out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
-			in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-		} else {
-			ChatClient.println("Invalid server address in settings", ChatClient.colorError);
-		}
 	}
 
 	private boolean handleMessage(String data) {

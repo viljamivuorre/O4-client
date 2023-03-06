@@ -42,6 +42,7 @@ public class ChatClient implements ChatClientDataProvider {
 	private static final String CMD_EXIT = "/exit";
 
 	private String currentServer = SERVER; // URL of the server without paths.
+	private int serverPort = 10000; // The server port listening to client connections.
 	private String nick = null; // Nickname, user can change the name visible in chats.
 	private String currentChannel = "main";
 	private ChatTCPClient tcpClient = null; // Client handling the requests & responses.
@@ -249,6 +250,7 @@ public class ChatClient implements ChatClientDataProvider {
 	 */
 	private void printInfo() {
 		println("Server    : " + currentServer, colorInfo);
+		println("Port      : " + serverPort, colorInfo);
 		println("Channel   : " + currentChannel, colorInfo);
 		println("Nick      : " + nick, colorInfo);
 		println("Use color : " + (useColorOutput ? "yes" : "no"), colorInfo);
@@ -294,7 +296,14 @@ public class ChatClient implements ChatClientDataProvider {
 		FileInputStream istream;
 		istream = new FileInputStream(configFile);
 		config.load(istream);
-		currentServer = config.getProperty("server", "127.0.0.1:10000");
+		String serverStr = config.getProperty("server", "localhost:10000");
+		String [] components = serverStr.split(":");
+		if (components.length == 2) {
+			serverPort = Integer.parseInt(components[1]);
+			currentServer = components[0];
+		} else {
+			println("Invalid server address in settings", ChatClient.colorError);
+		}
 		nick = config.getProperty("nick", "");
 		if (config.getProperty("usecolor", "false").equalsIgnoreCase("true")) {
 			useColorOutput = true;
@@ -311,6 +320,11 @@ public class ChatClient implements ChatClientDataProvider {
 	@Override
 	public String getServer() {
 		return currentServer;
+	}
+
+	@Override
+	public int getPort() {
+		return serverPort;
 	}
 
 	@Override
