@@ -35,6 +35,10 @@ public class ChatTCPClient implements Runnable {
 		dataProvider = provider;
 	}
 
+	public boolean isConnected() {
+		return running;
+	}
+
 	public synchronized void postChatMessage(String message) {
 		String userName = dataProvider.getNick();
 		ChatMessage msg = new ChatMessage(LocalDateTime.now(), userName, message);
@@ -65,12 +69,14 @@ public class ChatTCPClient implements Runnable {
 				}
 			} catch (EOFException e) {
 				// ChatClient.println("ChatSession: EOFException", ChatClient.colorError);
-				close();
 			} catch (IOException e) {
 				// ChatClient.println("ChatSession: IOException", ChatClient.colorError);
-				close();
+				ErrorMessage msg = new ErrorMessage("Cannot connect: " + e.getLocalizedMessage(), true);
+				dataProvider.handleReceived(msg);
 			} catch (Exception e) {
 				e.printStackTrace();
+			} finally {
+				close();
 			}
 		}
 	}

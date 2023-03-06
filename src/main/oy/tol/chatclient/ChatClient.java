@@ -98,7 +98,7 @@ public class ChatClient implements ChatClientDataProvider {
 		printCommands();
 		printInfo();
 		Console console = System.console();
-		while (running) {
+		while (running && tcpClient.isConnected()) {
 			try {
 				printPrompt(LocalDateTime.now(), nick, "", colorMsg);
 				String command = console.readLine().trim();
