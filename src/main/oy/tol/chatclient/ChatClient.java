@@ -187,8 +187,8 @@ public class ChatClient implements ChatClientDataProvider {
 			newChannel = channel;
 		}
 		if (newChannel.length() > 0) {
+			tcpClient.changeChannelTo(newChannel);	
 			currentChannel = newChannel;
-			tcpClient.changeChannelTo(channel);	
 		}
 	}
 
