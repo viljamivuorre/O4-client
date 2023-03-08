@@ -18,6 +18,7 @@ import java.time.format.DateTimeFormatterBuilder;
 import com.diogonunes.jcolor.Ansi;
 import com.diogonunes.jcolor.Attribute;
 
+import oy.tol.chat.ChangeTopicMessage;
 import oy.tol.chat.ChatMessage;
 import oy.tol.chat.ErrorMessage;
 import oy.tol.chat.ListChannelsMessage;
@@ -350,6 +351,12 @@ public class ChatClient implements ChatClientDataProvider {
 				if (null != channels) {
 					printPrompt(LocalDateTime.now(), "SERVER", "Channels in server: " + channels.toString(), fromServerInfo);
 				}
+				break;
+			}
+
+			case Message.CHANGE_TOPIC: {
+				ChangeTopicMessage msg = (ChangeTopicMessage)message;
+				printPrompt(LocalDateTime.now(), "SERVER", msg.getTopic(), colorInfo);
 				break;
 			}
 
