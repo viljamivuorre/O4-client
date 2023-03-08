@@ -123,8 +123,8 @@ available in the client, enter `/help` in the client. The available commands are
 /list      -- List the channels currently available in the chat server
 /topic     -- Set a topic for the current channel
 /color     -- Toggles color output on/off
-/help, /?   -- Prints out this information
-/info  /i  -- Prints out settings and user information
+/help, /?  -- Prints out this information
+/info, /i  -- Prints out settings and user information
 /exit      -- Exit the client app
  > To chat, write a message and press enter to send it.
 ```

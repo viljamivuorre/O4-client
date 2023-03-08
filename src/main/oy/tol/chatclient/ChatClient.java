@@ -240,8 +240,8 @@ public class ChatClient implements ChatClientDataProvider {
 		println("/list      -- List the channels currently available in the chat server", colorInfo);
 		println("/topic     -- Set a topic for the current channel", colorInfo);
 		println("/color     -- Toggles color output on/off", colorInfo);
-		println("/help, /?   -- Prints out this information", colorInfo);
-		println("/info  /i  -- Prints out settings and user information", colorInfo);
+		println("/help, /?  -- Prints out this information", colorInfo);
+		println("/info, /i  -- Prints out settings and user information", colorInfo);
 		println("/exit      -- Exit the client app", colorInfo);
 		println(" > To chat, write a message and press enter to send it.", colorInfo);
 	}
