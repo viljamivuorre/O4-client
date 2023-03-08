@@ -45,6 +45,8 @@ The client app is structured as described in this high level UML class diagram:
 
 Note that not all details of the implementation are visible in this diagram.
 
+> Note that this client does not support the reply-to chat messages. UI does not provide any means to reply to a specific previous received message. Nor does the UI show if an incoming message is a reply to a previous sent or received message.
+
 ## Building the client
 
 Build the client from command line:
