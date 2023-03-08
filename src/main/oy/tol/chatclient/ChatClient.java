@@ -349,20 +349,20 @@ public class ChatClient implements ChatClientDataProvider {
 				ListChannelsMessage msg = (ListChannelsMessage)message;
 				List<String> channels = msg.getChannels();
 				if (null != channels) {
-					printPrompt(LocalDateTime.now(), "SERVER", "Channels in server: " + channels.toString(), fromServerInfo);
+					printPrompt(LocalDateTime.now(), "SERVER", "channels in server: " + channels.toString(), fromServerInfo);
 				}
 				break;
 			}
 
 			case Message.CHANGE_TOPIC: {
 				ChangeTopicMessage msg = (ChangeTopicMessage)message;
-				printPrompt(LocalDateTime.now(), "SERVER", msg.getTopic(), colorInfo);
+				printPrompt(LocalDateTime.now(), "SERVER", "channel topic is: " + msg.getTopic(), colorInfo);
 				break;
 			}
 
 			case Message.STATUS_MESSAGE: {
 				StatusMessage msg = (StatusMessage)message;
-				printPrompt(LocalDateTime.now(), "SERVER", msg.getStatus(), colorInfo);
+				printPrompt(LocalDateTime.now(), "SERVER", "status: " + msg.getStatus(), colorInfo);
 				break;
 			}
 
