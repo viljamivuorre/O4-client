@@ -49,7 +49,6 @@ package java.net {
 }
 package org.json {
   class JSONObject
-  class JSONArray
 }
 ChatClient : main()
 ChatClientDataProvider <|.. ChatClient
@@ -57,7 +56,6 @@ ChatClient *-- ChatTCPClient
 ChatTCPClient ..> ChatClientDataProvider
 ChatTCPClient --> Socket
 ChatTCPClient --> JSONObject
-ChatTCPClient --> JSONArray
 ChatTCPClient ..> Message: sends and receives
 ChatClient ..> Message
 note "Communicates with ChatServer" as N1
