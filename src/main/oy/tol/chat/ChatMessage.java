@@ -3,6 +3,7 @@ package oy.tol.chat;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 import org.json.JSONObject;
@@ -10,10 +11,13 @@ import org.json.JSONObject;
 public class ChatMessage extends Message {
     private UUID id = UUID.randomUUID();
     private UUID inReplyTo;
+    private String directMessageTo;
     private LocalDateTime sent;
     private String nick;
-	private String message;
+    private String message;
 
+    private static final DateTimeFormatter timeFormatter = DateTimeFormatter.ISO_LOCAL_TIME;
+    private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     public ChatMessage(UUID id, LocalDateTime sent, String nick, String message) {
         super(Message.CHAT_MESSAGE);
@@ -49,8 +53,24 @@ public class ChatMessage extends Message {
         return id;
     }
 
+    public UUID isReplyTo() {
+        return inReplyTo;
+    }
+
     public void setAsReplyTo(UUID inReplyTo) {
         this.inReplyTo = inReplyTo;
+    }
+
+    public boolean isDirectMessage() {
+        return directMessageTo != null;
+    }
+
+    public String directMessageRecipient() {
+        return directMessageTo;
+    }
+
+    public void setRecipient(String recipientNick) {
+        directMessageTo = recipientNick;
     }
 
     public String getNick() {
@@ -63,22 +83,29 @@ public class ChatMessage extends Message {
 
     public String getMessage() {
         return message;
-   }
+    }
 
-   public void setMessage(String message) {
+    public void setMessage(String message) {
         this.message = message;
-   }
+    }
 
     public long dateAsLong() {
         return sent.toInstant(ZoneOffset.UTC).toEpochMilli();
+    }
+
+    public LocalDateTime getSent() {
+        return this.sent;
     }
 
     public void setSent(long epoch) {
         sent = LocalDateTime.ofInstant(Instant.ofEpochMilli(epoch), ZoneOffset.UTC);
     }
 
-    public LocalDateTime getSent() {
-        return sent;
+    public String sentAsString() {
+        if (LocalDateTime.now().getDayOfMonth() == sent.getDayOfMonth()) {
+            return sent.format(timeFormatter);
+        }
+        return sent.format(dateTimeFormatter);
     }
 
     @Override
@@ -87,6 +114,9 @@ public class ChatMessage extends Message {
         object.put("id", id.toString());
         if (null != inReplyTo) {
             object.put("inReplyTo", inReplyTo.toString());
+        }
+        if (null != directMessageTo) {
+            object.put("directMessageTo", directMessageTo);
         }
         object.put("type", getType());
         object.put("user", nick);

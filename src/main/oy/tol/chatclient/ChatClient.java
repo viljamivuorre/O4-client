@@ -58,6 +58,7 @@ public class ChatClient implements ChatClientDataProvider {
 	public static final Attribute colorInfo = Attribute.YELLOW_TEXT();
 	public static final Attribute colorOtherNick = Attribute.BRIGHT_YELLOW_TEXT();
 	public static final Attribute fromServerInfo = Attribute.BRIGHT_BLUE_TEXT();
+	public static final Attribute colorPrivateMsg = Attribute.GREEN_BACK();
 
 	private static final DateTimeFormatter timeFormatter = new DateTimeFormatterBuilder()
 			.appendValue(HOUR_OF_DAY, 2)
@@ -244,6 +245,7 @@ public class ChatClient implements ChatClientDataProvider {
 		println("/info, /i  -- Prints out settings and user information", colorInfo);
 		println("/exit      -- Exit the client app", colorInfo);
 		println(" > To chat, write a message and press enter to send it.", colorInfo);
+		println(" > Send direct message to nick by starting the message with @nick ", colorInfo);
 	}
 
 	/**
@@ -340,7 +342,11 @@ public class ChatClient implements ChatClientDataProvider {
 			case Message.CHAT_MESSAGE: {
 				if (message instanceof ChatMessage) {
 					ChatMessage msg = (ChatMessage)message;
-					printPrompt(msg.getSent(), msg.getNick(), msg.getMessage(), colorOtherNick);
+					if (msg.isDirectMessage()) {
+						printPrompt(msg.getSent(), msg.getNick(), "[private] " + msg.getMessage(), colorPrivateMsg);
+					} else {
+						printPrompt(msg.getSent(), msg.getNick(), msg.getMessage(), colorOtherNick);
+					}
 				}
 				break;
 			}

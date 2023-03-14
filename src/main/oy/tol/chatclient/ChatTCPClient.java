@@ -43,7 +43,19 @@ public class ChatTCPClient implements Runnable {
 
 	public synchronized void postChatMessage(String message) {
 		String userName = dataProvider.getNick();
-		ChatMessage msg = new ChatMessage(LocalDateTime.now(), userName, message);
+		String recipientNick = null;
+		String actualMessage = message;
+		if (message.startsWith("@")) {
+			int firstSpace = message.indexOf(' ', 0);
+			if (firstSpace > 0 && firstSpace < message.length()) {
+				recipientNick = message.substring(1, firstSpace);
+				actualMessage = message.substring(firstSpace+1);
+			}
+		}
+		ChatMessage msg = new ChatMessage(LocalDateTime.now(), userName, actualMessage);
+		if (null != recipientNick) {
+			msg.setRecipient(recipientNick);
+		}
 		String jsonObjectString = msg.toJSON();
 		write(jsonObjectString);
 	}
