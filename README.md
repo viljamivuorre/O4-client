@@ -51,8 +51,8 @@ The client app is structured as described in this high level UML class diagram:
 Important things to be aware of:
 
 * **Note 1**: Not all details of the implementation are visible in this diagram.
-* **Note 2**: The `ChatTCPClient` **must be executed in a thread**. `ChatTCPClient` calls *blocking* network functions to read and send data over the TCP socket. If you run the `ChatTCPClient` on the main thread of the application, this effectively blocks the GUI of the application. For an example on how to do this, see lines 99-100 in `ChatClient.java` on how to do this.
-* **Note 3**: If you want to have several separate sessions to the server (e.g. using a different nick), or separate sessions to *different* servers, just create one `ChatTCPClient` for each of these connections. You will most probably also want to have different implementations of `ChatClientDataProvider` interface for these `ChatTCPClient` instances.
+* **Note 2**: The `ChatTCPClient` **must be executed in a thread**. `ChatTCPClient` calls *blocking* network functions to read and send data over the TCP socket. If you run the `ChatTCPClient` on the main thread of the application, this effectively blocks the GUI of the application. For an example on how to do this, see lines 99-100 in `ChatClient.java`.
+* **Note 3**: If you want to have several *separate* sessions to a server (e.g. using a different nick), or separate sessions to *different* servers, just create one `ChatTCPClient` for each of these connections. You will most probably also want to have different implementations of `ChatClientDataProvider` interface for these `ChatTCPClient` instances.
 * **Note 4**: This command line client *does not support* the reply-to chat messages. UI does not provide any means to reply to a specific previous received message. Nor does the UI show if an incoming message is a reply to a previous sent or received message.
 
 ## Building the client
@@ -90,9 +90,9 @@ usecolor=true
 
 First build the client, as instructed above.
 
-Then run the server first, then launch the client. The client does run without the server running, obviously, but quits without a connection when you do anything (press enter on the client console).
+Run the server first, then launch the client. The client does run without the server running, obviously, but quits without a connection when you do anything (press enter on the client console). This client attempts to connect at launch, and it cannot connect to the server at later time. Relaunch the client if server was not running.
 
-Run the client by passing the name of the configuratio file as the one and only startup parameter.
+Run the client by passing the name of the configuration file as the one and only startup parameter.
 
 You can launch the client either from the terminal:
 
@@ -112,7 +112,7 @@ If debugging from VS Code, you still need to give the startup parameter to the c
 
 How to do that in VS Code? If you don't have launch configuration file `launch.json` already in the VS Code, add a launch configuration to the project. If you don't know how, [take a look at this manual](https://code.visualstudio.com/docs/editor/debugging#_launch-configurations).  
 
-Make sure you edit the `args` configuration in the `launch.json`, seen in the image below in line 26, so that the arguments has the full path and file name of the `chatclient.properties` file:
+Make sure you **edit** the `args` configuration in the `launch.json`, seen in the image below in line 26, so that the arguments has the full path and file name of the `chatclient.properties` file in **your** development machine:
 
 ![VS Code launch.json startup parameter](launch-config-json.png)
 
