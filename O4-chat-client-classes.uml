@@ -14,6 +14,7 @@ package oy.tol.chatclient {
       -inReplyTo: UUID
       -sent: LocalDateTime 
       -nick: String
+      -directMessageTo: String
       -message: String 
     }
     class ChangeTopicMessage {

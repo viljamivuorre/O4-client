@@ -1,21 +1,26 @@
 # O4 Chat Client
 
-This project is a console chat client app for Ohjelmointi 4 (Programming 4) course. 
+O4 Chat Client is a console chat client app for Ohjelmointi 4 (Programming 4) course. 
 
-The client acts as an example of how to use the client side API to the O4-server.
+The client acts as an example of how to use the client side API to the [O4-server](https://github.com/anttijuu/o4-server).
 
-**You** can then build your **own GUI chat client** using this project as an example.
+**You** can then build your **own GUI chat client** using this project as an example on how to use the server API.
+
+You may use the classes in the `oy.tol.chat` package in implementing your GUI client in Java. You may also use the `ChatTCPClient` implementation to connect to and use the chat server.
+
+If you wish to implement a client with a different programming language, you can do that. The server API uses TCP for connecting and sending / receiving. Payload is JSON, so it is possible to use *any* programming language to implement different kinds of clients. See the 04-server for details on JSON message structures.
 
 The O4-server is a chat server with the following main properties:
 
 * Clients connect to the server using a TCP socket.
-* No need to authenticate users, just connect and start chatting.
-* User nick's are not (unfortunately) verified; several users can thus have the same nick.
-* The chat messages are not saved nor buffered on the server side, so you cannot view old messages before the time the client connected.
+* There is no authentication of users, just connect and start chatting.
+* User nick's are not (unfortunately) verified; several users can thus have the same nick. This may cause issues. Feel free to improve the server.
+* The chat messages are not saved nor buffered on the server side, so you cannot view old messages, sent before the client connected.
 * The server supports chat *channels* you can join. Only clients on the same channel can view messages sent to the channel.
 * Each channel can have a topic any user may change.
-* You can reply to a chat message.
-* A server side bot channel can be joined to. A bot channel reads messages from a text file and posts those periodically to the channel. This can be used to test clients and how they are able to receive messages from the server.
+* You can reply to a specific chat message. How this is done, is client implementation specific. This console client does not support this, at the moment.
+* You can send *private messages* to a specific user using their nick. Note that the user must send at least one message; otherwise the server does not know the nick of the user and cannot forward any private messages to the user.
+* You can join a server side bot channel if server is configured to have one. A bot channel reads messages from a text file and posts those periodically to the channel. This can be used to test clients and how they are able to receive messages from the server.
 
 ## Dependencies
 
@@ -32,7 +37,7 @@ The client app is structured as described in this high level UML class diagram:
 ![Client class diagram](O4-chat-client-classes.png)
 
 * `ChatClient` is the command line UI for the app, running the show.
-*  `ChatClient` uses the `ChatTCPClient` to send the messages to the remote ChatServer. `ChatTCPClient` listens to messages from the server and converts them from JSON to `Message` objects, passing them then to `ChatClient` for handling.
+*  `ChatClient` uses the `ChatTCPClient` to connect to and send/receive messages with the remote ChatServer. `ChatTCPClient` listens to messages from the server and converts them from JSON to `Message` objects, passing them then to `ChatClient` for handling.
 * An abstract `Message` class forms the basis for all types of messages. Any `Message` can convert itself to a JSON String using the method `toJSON()`.
 * `ChatMessage`s are the actual chat messages users sent to and received from the server to talk with each others.
 * `ChangeTopicMessage` is used to request channel topic change as well as received by the client when the channel topic changes.
@@ -43,9 +48,12 @@ The client app is structured as described in this high level UML class diagram:
 * `MessageFactory` can be used to create `Message` objects from the JSON received from the server.
 * `ChatTCPClient` does not directly use `ChatClient`, but accesses it using the callback interface class `ChatClientDataProvider`. When the TCP client needs the settings (nick, server address, etc.), it asks these from the client using this interface the `ChatClient` implements.
 
-Note that not all details of the implementation are visible in this diagram.
+Important things to be aware of:
 
-> Note that this client does not support the reply-to chat messages. UI does not provide any means to reply to a specific previous received message. Nor does the UI show if an incoming message is a reply to a previous sent or received message.
+* **Note 1**: Not all details of the implementation are visible in this diagram.
+* **Note 2**: The `ChatTCPClient` **must be executed in a thread**. `ChatTCPClient` calls *blocking* network functions to read and send data over the TCP socket. If you run the `ChatTCPClient` on the main thread of the application, this effectively blocks the GUI of the application. For an example on how to do this, see lines 99-100 in `ChatClient.java` on how to do this.
+* **Note 3**: If you want to have several separate sessions to the server (e.g. using a different nick), or separate sessions to *different* servers, just create one `ChatTCPClient` for each of these connections. You will most probably also want to have different implementations of `ChatClientDataProvider` interface for these `ChatTCPClient` instances.
+* **Note 4**: This command line client *does not support* the reply-to chat messages. UI does not provide any means to reply to a specific previous received message. Nor does the UI show if an incoming message is a reply to a previous sent or received message.
 
 ## Building the client
 
@@ -73,34 +81,34 @@ nick=anttij
 usecolor=true
 ```
 
-* `server` is the name of the server. If you run the server on the same machine where the client is, use `localhost`. Check that the port is the same server is configured to use. Note that the server name must be known, that is it is located on the same local network or on a public server with known host name.
-* `nick` is the default user name to use when connecting to the server. You can change the nick when the client is running, though.
-* `usecolor` is true if you want to use colourful output in the client. If this does not work correctly in your PC and terminal, set this to false.
+* `server` is the **host name** of the server separated by `:`, following with the **port number** the server is listening to for incoming client connections. If you run the server on the same machine where the client is, use `localhost`. Check that the port is the same server is configured to use. Note that the server name must be known, that is it is located on the same local network or on a public server with known host name DNS can find.
+* `nick` is the default user name to use when client is connecting to the server. You can change the nick when the client is running, though (see below).
+* set `usecolor` to true if you want to use colourful output in the client. If this does not work correctly in your PC and terminal, set this to false.
 
 
 ## Running the client from terminal
 
-After you have build and configured the client, you can run it. Pass the name of the configuratio file as the one and only startup parameter.
+First build the client, as instructed above.
 
-Run the server first, then launch the client. The client does run without the server running, obviously, but quits without a connection when you do anything (press enter on the client console).
+Then run the server first, then launch the client. The client does run without the server running, obviously, but quits without a connection when you do anything (press enter on the client console).
+
+Run the client by passing the name of the configuratio file as the one and only startup parameter.
 
 You can launch the client either from the terminal:
 
-```bash
+```console
 java -jar target\ChatClient-0.0.1-SNAPSHOT-jar-with-dependencies.jar chatclient.properties
 ```
 
 or in *nix machines:
 
-```bash
+```console
 java -jar target/ChatClient-0.0.1-SNAPSHOT-jar-with-dependencies.jar chatclient.properties
 ```
 
-
 ## Running the client from VS Code
 
-If debugging from VS Code, you still need to give the startup parameter to the client as instructed above in 
-**Running the client from terminal**. 
+If debugging from VS Code, you still need to give the startup parameter to the client as instructed above in **Running the client from terminal**. 
 
 How to do that in VS Code? If you don't have launch configuration file `launch.json` already in the VS Code, add a launch configuration to the project. If you don't know how, [take a look at this manual](https://code.visualstudio.com/docs/editor/debugging#_launch-configurations).  
 
@@ -108,13 +116,11 @@ Make sure you edit the `args` configuration in the `launch.json`, seen in the im
 
 ![VS Code launch.json startup parameter](launch-config-json.png)
 
-Then when you launch the client (Run or Debug), use the "Launch ChatClient" launch configuration as you can see selected in the
-upper left corner of the image below (red underlining). That contains the launch configuration with startup parameters.
+Then when you launch the client (Run or Debug), use the **Launch ChatClient** launch configuration. That contains the launch configuration with startup parameters.
 
 ## Using the client
 
-Run the client with the startup parameter, and you should then see the menu the client prints out. For commands 
-available in the client, enter `/help` in the client. The available commands are:
+Run the client with the startup parameter, and you should then see the menu the client prints out. For commands available in the client, enter `/help` in the client. The available commands are:
 
 ```console
 --- O4 Chat Client Commands ---
@@ -135,7 +141,7 @@ You can pass the channel name, nick or topic as the parameter to the command, e.
 /join ohjelmointi-4
 ```
 
-or just give the command and then the channel name:
+or just give the command `/join` without any parameters, and then the channel name when the client asks for it:
 
 ```console
 [14:35:24 @main]   anttij > /join
@@ -145,6 +151,32 @@ Change to channel > ohjelmointi-4
 [14:35:30 @ohjelmointi-4]   anttij >
 [14:35:30 @ohjelmointi-4]   SERVER > You joined the channel ohjelmointi-4
 ```
+
+Send messages by writing them to the prompt:
+
+```console
+[10:13:39 @main]   SERVER > status: You joined the channel main
+[10:13:39 @main]   anttij >
+[10:13:39 @main]   SERVER > channel topic is: Everything under the sun and moon
+[10:13:39 @main]   anttij > Hello there!
+
+[10:13:43 @main]   anttij >
+```
+And other connected clients on the same channel can see your message.
+
+If you wish to send a private message to a known user connected to the server, add the `@nick` before the message:
+
+```console
+[10:13:39 @main]   SERVER > channel topic is: Everything under the sun and moon
+[10:13:39 @main]   anttij > Hello there!
+
+[10:13:43 @main]   anttij > @setämies Mitä kuuluu setämies?
+```
+
+And if the user `@setämies` is known to the server and connected, the message is relayed only to them.
+
+> Note that if `@setämies` has not sent any messages, their nick is not known to the server and the private message cannot be relayed.
+
 
 ## More information
 
