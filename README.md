@@ -26,11 +26,11 @@ The O4-server is a chat server with the following main properties:
 
 The following are needed to build and run the client:
 
-* JDK 15 or later
+* JDK 18 or later.
 * Maven for building and packaging the executable.
-* JSON library (see details from `pom.xml`)
-* JColor for color output (optional, off by default)
-* An IDE if you wish to view and/or edit the code.
+* JSON library (see details from pom.xml, Maven will download and install this when building).
+* JColor for color output (optional, off by default, Maven will download and install this when building).
+* An IDE if you wish to view and/or edit the code (e.g. Visual Studio Code with Java extensions, or Eclipse).
 
 The client app is structured as described in this high level UML class diagram:
 
